@@ -22,7 +22,7 @@ class Reconciliations extends Controller
      */
     public function index()
     {
-        $reconciliations = Reconciliation::with('account')->collect();
+        $reconciliations = Reconciliation::with('account')->orderBy('ended_at', 'desc')->collect();
 
         $accounts = collect(Account::enabled()->orderBy('name')->pluck('name', 'id'));
 
@@ -180,9 +180,9 @@ class Reconciliations extends Controller
         $started = explode(' ', $started_at)[0] . ' 00:00:00';
         $ended = explode(' ', $ended_at)[0] . ' 23:59:59';
 
-        $transactions = Transaction::with('account', 'contact')->where('account_id', $account->id)->whereBetween('paid_at', [$started, $ended])->get();
+        $transactions = Transaction::with('account', 'contact')->where('account_id', $account->id)->where('reconciled', '=', 0)->whereDate('paid_at', '<', $ended)->get();
 
-        return collect($transactions)->sortByDesc('paid_at');
+        return collect($transactions)->sortBy('paid_at');
     }
 
     /**
@@ -199,13 +199,13 @@ class Reconciliations extends Controller
         $total = $account->opening_balance;
 
         // Sum income transactions
-        $transactions = $account->income_transactions()->whereDate('paid_at', '<', $started_at)->get();
+        $transactions = $account->income_transactions()->whereDate('paid_at', '<', $started_at)->where('reconciled', '=', 1)->get();
         foreach ($transactions as $item) {
             $total += $item->amount;
         }
 
         // Subtract expense transactions
-        $transactions = $account->expense_transactions()->whereDate('paid_at', '<', $started_at)->get();
+        $transactions = $account->expense_transactions()->whereDate('paid_at', '<', $started_at)->where('reconciled', '=', 1)->get();
         foreach ($transactions as $item) {
             $total -= $item->amount;
         }
