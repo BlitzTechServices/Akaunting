@@ -56,7 +56,7 @@ class Reconciliations extends Controller
 
         $currency = $account->currency;
 
-        $transactions = $this->getTransactions($account, $started_at, $ended_at);
+        $transactions = $this->getTransactions($account, $ended_at);
 
         $opening_balance = $this->getOpeningBalance($account, $started_at);
 
@@ -104,9 +104,9 @@ class Reconciliations extends Controller
 
         $currency = $account->currency;
 
-        $transactions = $this->getTransactions($account, $reconciliation->started_at, $reconciliation->ended_at);
+        $transactions = $this->getTransactions($account, $reconciliation->ended_at, $reconciliation->updated_at, $reconciliation->reconciled);
 
-        $opening_balance = $this->getOpeningBalance($account, $reconciliation->started_at, $reconciliation->ended_at);
+        $opening_balance = $this->getOpeningBalance($account, $reconciliation->started_at);
 
         return view('banking.reconciliations.edit', compact('reconciliation', 'account', 'currency', 'opening_balance', 'transactions'));
     }
@@ -170,17 +170,30 @@ class Reconciliations extends Controller
      * Add transactions array.
      *
      * @param $account
-     * @param $started_at
      * @param $ended_at
+     * @param $updated_at
+     * @param bool $reconciled
      *
      * @return mixed
      */
-    protected function getTransactions($account, $started_at, $ended_at)
+    protected function getTransactions($account, $ended_at, $updated_at = null, bool $reconciled = false)
     {
-        $started = explode(' ', $started_at)[0] . ' 00:00:00';
         $ended = explode(' ', $ended_at)[0] . ' 23:59:59';
+        $updated_after = Date::parse($updated_at)->addSeconds(30)->toDateTimeString();
 
-        $transactions = Transaction::with('account', 'contact')->where('account_id', $account->id)->where('reconciled', '=', 0)->whereDate('paid_at', '<', $ended)->get();
+        if ($reconciled) {
+            $transactions = Transaction::with('account', 'contact')
+                ->where('account_id', $account->id)
+                ->whereBetween('updated_at', [$updated_at, $updated_after])
+                ->where('reconciled', '=', $reconciled)
+                ->get();
+        } else {
+            $transactions = Transaction::with('account', 'contact')
+                ->where('account_id', $account->id)
+                ->whereDate('paid_at', '<', $ended)
+                ->where('reconciled', '=', $reconciled)
+                ->get();
+        }
 
         return collect($transactions)->sortBy('paid_at');
     }
